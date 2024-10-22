@@ -73,10 +73,6 @@ def test_thunderfx_mistral_nemo_small():
         num_training_steps=num_epochs * len(dataloader),
     )
 
-    # Move model to GPU if available
-    # device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    # model.to(device)
-
     mdl.train()
     for epoch in range(num_epochs):
         total_loss = 0
