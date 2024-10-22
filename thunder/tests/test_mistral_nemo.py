@@ -18,6 +18,7 @@ def test_thunderfx_mistral_nemo_small():
         model_id,
         torch_dtype=torch.bfloat16,
         ignore_mismatched_sizes=True,
+        trust_remote_code=False,
     )
 
     # Setup a "small" version of NeMo-Mistral that does not require downloading
@@ -51,7 +52,8 @@ def test_thunderfx_mistral_nemo_small():
         tokenizer.add_special_tokens({"pad_token": "[PAD]"})
         mdl.resize_token_embeddings(len(tokenizer))
 
-    dataset = datasets.load_dataset("tiny_shakespeare", split="train", trust_remote_code=False)
+    dataset = datasets.load_dataset("tiny_shakespeare", split="train",
+                                    trust_remote_code=True)
 
     def tokenize_function(examples):
         return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=2)
