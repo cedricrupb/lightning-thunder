@@ -362,6 +362,7 @@ def test_quantization():
 
 
 @thunder.tests.framework.requiresCUDA
+@pytest.mark.skip(reason="Dependencies, trust issues")
 def test_thunderfx_mistral_nemo_small():
     """
     Runs a small version of Mistral-NeMo
