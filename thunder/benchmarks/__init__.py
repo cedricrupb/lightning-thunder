@@ -263,7 +263,7 @@ def _benchmark(
             pass
         elif use_grad_transform:
             # This populates the grads on the module (even though they're cleared in a moment)
-            #   because calling backward() in PyTorch populates the grads, so for a far comparison
+            #   because calling backward() in PyTorch populates the grads, so for a fair comparison
             #   the benchmark needs to account for that happening
             if isinstance(fn, torch.nn.Module):
                 populate_grads(result, fn)
