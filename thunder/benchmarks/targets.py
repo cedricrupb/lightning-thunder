@@ -22,6 +22,7 @@ from thunder.benchmarks import (
     LitGPTSDPABenchmark,
     LitGPTSwigluBenchmark,
     LlamaMLPBenchmark,
+    MistralNeMoBenchmark,
     NanoGPTBenchmark,
     NanoGPTCrossEntropyBenchmark,
     LitGPTGeluBenchmark,
@@ -567,6 +568,23 @@ def test_llama2_7b_rmsnorm_grad(benchmark, executor: Callable, compute_type: Com
 
     bench: Benchmark = LlamaRMSNormBenchmark(
         n_embd=4096, device="cuda:0", dtype=thunder.bfloat16, requires_grad=is_requires_grad(compute_type)
+    )
+
+    args, kwargs = bench.make_batch()
+    fn = executor(bench.fn())
+
+    benchmark_for_compute_type(compute_type, benchmark, fn, args, kwargs)
+
+
+@pytest.mark.parametrize(
+    "executor,",
+    (torch_executor, torch_compile_executor, thunderfx_executor),
+    ids=("torch", "torch.compile", "thunderfx")
+)
+@parametrize_compute_type
+def test_mistral_nemo(benchmark, executor: Callable, compute_type: ComputeType):
+    bench: Benchmark = MistralNeMoBenchmark(
+        device="cuda:0", requires_grad=is_requires_grad(compute_type)
     )
 
     args, kwargs = bench.make_batch()

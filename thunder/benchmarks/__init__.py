@@ -3010,6 +3010,89 @@ class TorchbenchBenchmark(Benchmark, metaclass=UserFacingBenchmarkMeta):
         return self.model
 
 
+class MistralNeMoBenchmark(Benchmark, metaclass=UserFacingBenchmarkMeta):
+    _args = (
+        BenchmarkArg(
+            name="device",
+            description="A string representing the device to run on. Default is 'cuda'.",
+        ),
+    )
+
+    @classmethod
+    @property
+    def name(cls) -> str:
+        return "mistral-nemo"
+
+    @classmethod
+    @property
+    def description(cls) -> str:
+        return "Mistral-NeMo model from HuggingFace"
+
+    @classmethod
+    @property
+    def args(cls) -> tuple[BenchmarkArg, ...]:
+        return cls._args
+
+    def __init__(
+        self,
+        device: str,
+        requires_grad: bool
+    ) -> None:
+        super().__init__()
+        self.device = torch.device(device)
+        self.requires_grad = requires_grad
+
+        import transformers
+        import datasets
+
+        model_id = "mistralai/Mistral-Nemo-Base-2407"
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_id,
+            torch_dtype=torch.bfloat16,
+            ignore_mismatched_sizes=True,
+            trust_remote_code=False,
+        )
+
+        # Small version (fits in 40Gb):
+        #config = transformers.models.mistral.configuration_mistral.MistralConfig(
+        #    num_hidden_layers=2,
+        #    torch_dtype=torch.bfloat16,
+        #    max_position_embeddings=1024,
+        #    architectures=["MistralForCausalLM"],
+        #    hidden_size=5120,
+        #    rms_norm_eps=1e-05,
+        #    rope_theta=1000000.0,
+        #    sliding_window=None,
+        #    vocab_size=131072,
+        #    head_dim=128,
+        #    _name_or_path=model_id,
+        #)
+        config = transformers.AutoConfig.from_pretrained(model_id)
+        self.model = transformers.AutoModelForCausalLM.from_config(config)
+        self.model.to(self.device)
+
+        # Add a padding token to the tokenizer
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+            self.model.resize_token_embeddings(len(self.tokenizer))
+
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=5e-5)
+
+        self.model.train()
+
+    def make_batch(self) -> tuple[list, dict]:
+        kwargs = {"dtype": torch.int64, "device": self.device}
+        return ([
+            torch.tensor([1, 10107], **kwargs).reshape((1,2)),
+            torch.tensor([1, 1], **kwargs).reshape((1,2)),
+        ], {})
+
+    def fn(self) -> Callable:
+        def train(i0: torch.Tensor, i1: torch.Tensor, **kwargs):
+            outputs = self.model(input_ids=i0, attention_mask=i1, labels=i0)
+        return train
+
+
 # TODO Add descriptions to the executors when listed, and list them alphabetically
 # TODO Allow querying benchmark for details
 # TODO Allow specifying benchmark arguments
