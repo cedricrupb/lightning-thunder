@@ -27,6 +27,7 @@ from thunder.benchmarks import (
     NanoGPTCrossEntropyBenchmark,
     LitGPTGeluBenchmark,
     NanoGPTLayerNormBenchmark,
+    Phi3Benchmark,
     ResNet50Benchmark,
     TorchbenchBenchmark,
     thunder_apex_executor,
@@ -592,6 +593,22 @@ def test_mistral_nemo(benchmark, executor: Callable, compute_type: ComputeType):
 
     benchmark_for_compute_type(compute_type, benchmark, fn, args, kwargs)
 
+
+@pytest.mark.parametrize(
+    "executor,",
+    (torch_executor, torch_compile_executor, thunderfx_executor),
+    ids=("torch", "torch.compile", "thunderfx")
+)
+@parametrize_compute_type
+def test_phi3(benchmark, executor: Callable, compute_type: ComputeType):
+    bench: Benchmark = Phi3Benchmark(
+        device="cuda:0", requires_grad=is_requires_grad(compute_type)
+    )
+
+    args, kwargs = bench.make_batch()
+    fn = executor(bench.fn())
+
+    benchmark_for_compute_type(compute_type, benchmark, fn, args, kwargs)
 
 # There are many configurations but only the following parameters affect the QKV split+RoPE benchmark:
 # - head_size

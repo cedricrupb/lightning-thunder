@@ -3093,6 +3093,98 @@ class MistralNeMoBenchmark(Benchmark, metaclass=UserFacingBenchmarkMeta):
         return train
 
 
+class Phi3Benchmark(Benchmark, metaclass=UserFacingBenchmarkMeta):
+    _args = (
+        BenchmarkArg(
+            name="device",
+            description="A string representing the device to run on. Default is 'cuda'.",
+        ),
+    )
+
+    @classmethod
+    @property
+    def name(cls) -> str:
+        return "phi3-mini-128k-instruct"
+
+    @classmethod
+    @property
+    def description(cls) -> str:
+        return "Phi-3-mini-128k-instruct model from HuggingFace"
+
+    @classmethod
+    @property
+    def args(cls) -> tuple[BenchmarkArg, ...]:
+        return cls._args
+
+    def __init__(
+        self,
+        device: str,
+        requires_grad: bool
+    ) -> None:
+        super().__init__()
+        self.device = torch.device(device)
+        self.requires_grad = requires_grad
+
+        import transformers
+        import datasets
+
+        model_id = "microsoft/Phi-3-mini-128k-instruct"
+
+        small_model = True
+        if small_model:
+            model_id = "microsoft/Phi-3-mini-4k-instruct"
+        #config = transformers.AutoConfig.from_config(
+        config = transformers.AutoConfig.from_pretrained(
+            model_id,
+            torch_dtype='auto',
+            trust_remote_code=False,
+        )
+        self.model = transformers.AutoModelForCausalLM.from_config(config)
+        self.model.to(self.device)
+
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_id,
+            torch_dtype='auto',
+            trust_remote_code=False,
+        )
+
+        # Add a padding token to the tokenizer
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+            self.model.resize_token_embeddings(len(self.tokenizer))
+
+        # Load a smaller dataset
+        dataset = datasets.load_dataset("tiny_shakespeare", split='train')
+        tok_len = 2 if small_model else 128
+        # Tokenize the dataset
+        def tokenize_function(examples):
+            return self.tokenizer(examples["text"], padding="max_length",
+                                  truncation=True, max_length=tok_len)
+        tokenized_dataset = dataset.map(tokenize_function, batched=True, remove_columns=["text"])
+        # Convert the dataset to PyTorch format and specify columns to return as tensors
+        tokenized_dataset.set_format(type='torch', columns=['input_ids', 'attention_mask'])
+        self.dataloader = torch.utils.data.DataLoader(tokenized_dataset, batch_size=1, shuffle=False)
+        self.iter = self.dataloader.__iter__()
+
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=5e-5)
+
+        self.model.train()
+
+    def make_batch(self) -> tuple[list, dict]:
+        rv = next(self.iter, None)
+        if rv == None:
+            kwargs = {"dtype": torch.int64, "device": self.device}
+            return ([
+                torch.tensor([3824, 21353], **kwargs).reshape((1,2)),
+                torch.tensor([1, 1], **kwargs).reshape((1,2)),
+            ], {})
+        return rv, {}
+
+    def fn(self) -> Callable:
+        def train(i0: torch.Tensor, i1: torch.Tensor, **kwargs):
+            outputs = self.model(input_ids=i0, attention_mask=i1, labels=i0)
+        return train
+
 # TODO Add descriptions to the executors when listed, and list them alphabetically
 # TODO Allow querying benchmark for details
 # TODO Allow specifying benchmark arguments
