@@ -13,8 +13,18 @@ from looseversion import LooseVersion
 import thunder.core.utils as utils
 from thunder.core.symbol import BoundSymbol
 from thunder.core.trace import TraceCtx, from_trace, TraceProvenance
-from thunder.core.pytree import tree_flatten, tree_map, tree_unflatten
-from thunder.core.proxies import Variable, variableify, Proxy, unvariableify
+from thunder.core.transforms import bsym_list_to_dag, toposort_bsym_dag, TOPOSORT_ORDER
+from thunder.torch import _syms_returning_views, _syms_that_may_return_views
+from thunder.core.pytree import tree_flatten, tree_map, tree_unflatten, tree_iter
+from thunder.core.proxies import (
+    Variable,
+    variableify,
+    Proxy,
+    unvariableify,
+    TensorProxy,
+    CollectionProxy,
+    FutureTensorProxy,
+)
 from thunder.core.prims import PrimIDs
 from thunder.core.transform_common import order_proxies
 from torch._subclasses.fake_tensor import FakeTensor, FakeTensorMode
@@ -364,16 +374,6 @@ def _fused_sdp_choice(
 
 
 def memory_efficient_sorting(trace):
-    from thunder.core.transforms import bsym_list_to_dag, toposort_bsym_dag, TOPOSORT_ORDER
-    from thunder.examine.memory_caculation import (
-        memory_calculate_skip_list,
-        thunder_alias_operator_list,
-        tree_iter,
-        TensorProxy,
-        CollectionProxy,
-        FutureTensorProxy,
-    )
-
     def get_size(t):
         res = 0
         if isinstance(t, CollectionProxy):
@@ -392,9 +392,9 @@ def memory_efficient_sorting(trace):
         max_val = float("-inf")
         for idx, node in enumerate(nodes):
             val = 0
-            if node.bsym.sym.id in memory_calculate_skip_list:
+            if node.bsym.sym.id in (PrimIDs.RETURN, PrimIDs.UNPACK_TRIVIAL, PrimIDs.UNPACK_SEQUENCE):
                 return idx
-            if node.bsym.sym.id in thunder_alias_operator_list:
+            if node.bsym.sym in chain(_syms_returning_views, _syms_that_may_return_views):
                 val = 0
             else:
                 for t in node.bsym.flat_proxy_outs:
@@ -413,9 +413,11 @@ def memory_efficient_sorting(trace):
             out_names.add(arg.name)
         return max_idx
 
+    utils.check(
+        not any(bsym.sym.id is PrimIDs.DEL for bsym in trace.bound_symbols),
+        lambda: "Cannot sort execution trace with del nodes",
+    )
     new_trace = from_trace(trace)
-    from thunder.core.transforms import bsym_list_to_dag, toposort_bsym_dag, TOPOSORT_ORDER
-
     new_trace.bound_symbols = toposort_bsym_dag(
         bsym_list_to_dag(trace.bound_symbols)[1],
         TOPOSORT_ORDER.BOTTOM_UP,
