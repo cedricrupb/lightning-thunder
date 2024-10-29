@@ -283,7 +283,6 @@ def _fused_sdp_choice(
 
 
 # bottom-up, always choose the bsym allocates the maximum memory in the topological equal node list.
-# assumes the output is allocated by the current bsym, the input has no other consumer then the current bsym is freed
 # assumes alias bsyms(e.g. reshape) cause no memory changes
 # keeps the original position of the return, unpack bsyms
 # def memory_efficient_sorting(trace):
@@ -374,7 +373,6 @@ def memory_efficient_sorting(trace):
         CollectionProxy,
         FutureTensorProxy,
     )
-    from functools import partial
 
     def get_size(t):
         res = 0
@@ -387,14 +385,10 @@ def memory_efficient_sorting(trace):
             res = t.numel * t.dtype.bytes
         return res
 
-    out_names = set()
-    flat_outs, _ = tree_flatten(trace.output)
-    list(out_names.add(out.name) for out in flat_outs if isinstance(out, Proxy))
+    out_names = {out.name for out in tree_flatten(trace.output)[0] if isinstance(out, Proxy)}
 
     def memory_selector(nodes):
-        # import pdb;pdb.set_trace()
         max_idx = 0
-        # min_val = float('+inf')
         max_val = float("-inf")
         for idx, node in enumerate(nodes):
             val = 0
@@ -405,20 +399,15 @@ def memory_efficient_sorting(trace):
             else:
                 for t in node.bsym.flat_proxy_outs:
                     val += get_size(t)
-                # skip the same input proxy, e.g. add(t0,t0)
                 arg_names = set()
                 for arg in chain(node.bsym.flat_proxy_args, node.bsym.flat_proxy_outs):
                     if arg.name in out_names or arg.name in arg_names:
                         continue
                     val -= get_size(arg)  # arg.numel* arg.dtype.bytes
                     arg_names.add(arg.name)
-            # if val<min_val:
-            #     min_val = val
-            #     min_idx = idx
             if val > max_val:
                 max_val = val
                 max_idx = idx
-        # print(min_idx)
         bsym = nodes[max_idx].bsym
         for arg in chain(bsym.flat_proxy_args, bsym.flat_proxy_outs):
             out_names.add(arg.name)
@@ -432,5 +421,4 @@ def memory_efficient_sorting(trace):
         TOPOSORT_ORDER.BOTTOM_UP,
         selector=memory_selector,
     )
-    # import pdb;pdb.set_trace()
     return new_trace
