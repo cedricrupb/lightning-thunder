@@ -469,6 +469,7 @@ def jit(
                     ) = cache_entry
                     try:
                         from thunder.core.profile import annotate_for_profile
+
                         inps, pro_to_epi = annotate_for_profile("prologue")(pro(*args, **kwargs))
                     except Exception as _:
                         continue
@@ -628,7 +629,7 @@ def jit(
             pro = thunder.core.profile.annotate_for_profile("prologue python_callable")(
                 prologue_trc.python_callable(include_decorators=False)
             )
-            #pro = thunder.core.profile.annotate_for_profile("prologue")(pro)
+            # pro = thunder.core.profile.annotate_for_profile("prologue")(pro)
 
             if epilogue_trc is not None:
                 epilogue = thunder.core.profile.annotate_for_profile("epilogue python_callable")(
@@ -743,6 +744,7 @@ def jit(
         def wrapped(*args, **kwargs):
             with thunder.core.profile.annotate_for_profile("computation"):
                 return fn(*args, **kwargs)
+
         return wrapped
 
     def decorate_computation_function(get_computation_and_inputs_fn, *decorators):
@@ -765,6 +767,7 @@ def jit(
         def wrapped(*args, **kwargs):
             cs.calls += 1
             return fn(*args, **kwargs)
+
         return wrapped
 
     @thunder.core.profile.annotate_for_profile("check_storage_aliases")
