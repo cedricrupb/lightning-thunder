@@ -587,8 +587,6 @@ def jit(
                     if len(tensor_args_consumed_by_inplace_grouped_by_numel) > 1:
                         vanilla_tensor_args = set(tensor_indices)
 
-            computation_trc = flatten_tensor_subclasses(computation_trc)
-
             if epilogue_trc is not None:
                 epilogue_traces = [epilogue_trc]
             else:
@@ -649,6 +647,7 @@ def jit(
             computation_trc = dce(computation_trc)
             computation_traces.append(computation_trc)
 
+            _tensor_subclass_transform_applied = False
             backward_trc = None
             if not cd.disable_torch_autograd_support:
                 tensor_cls = (pytorch.Tensor, TensorProxy)
@@ -662,6 +661,9 @@ def jit(
                     computation_trc, backward_trc = split_forward_backward(computation_trc, cd, cs, *inps)
                     # Note computation_trc and backward_trc have been appended to cs.last_(backward_)traces
                     # by split_forward_backward
+                    _tensor_subclass_transform_applied = True
+            if not _tensor_subclass_transform_applied:
+                computation_trc, _ = flatten_tensor_subclasses(computation_trc)
 
             if backward_trc is None:
                 from thunder.executors.passes import transform_for_execution as transform_for_execution_pass
